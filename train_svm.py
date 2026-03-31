@@ -10,9 +10,7 @@ def train_svm_model():
     X=np.load("X_features.npy")
     y=np.load("y_labels.npy")
 
-    X_no_color = X[:, 1:]
-
-    X_train, X_test, y_train, y_test = train_test_split(X_no_color, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
