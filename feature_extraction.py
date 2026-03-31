@@ -28,24 +28,22 @@ def extract_features(data_dir):
             if img is None: # if image is corrupted skip it
                 continue
 
-            # Feature 1: Edge Density
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # convert to grayscale
-            edges = cv2.Canny(gray, 100, 200) # detect edges
-            # calculate edge density by counting white pixels and dividing by total number of pixels
-            edge_density = np.sum(edges>0) / (edges.shape[0] * edges.shape[1])
+            img = cv2.resize(img, (256, 256)) # standardize image size for HOG
 
-            # Feature 2: Color Histogram
-            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # convert to OpenCV's default BGR format to RGB format
-            hist_features =[]
-
-            for i in range(3): # loop throught the 3 channels (R, G, B)
-                hist = cv2.calcHist([img_rgb], [i], None, [32], [0, 256]) # count the pixels into 32 bins
-                hist = cv2.normalize(hist, hist).flatten() # normalize the histogram
+            # Color Histogram
+            img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            hist_features = []
+            for i in range(3):
+                if i == 0: # hue channel
+                    ranges = [0, 180]
+                else: # saturation and value channels
+                    ranges = [0, 256]
+                hist = cv2.calcHist([img_hsv], [i], None, [32], ranges)
+                hist = cv2.normalize(hist, hist).flatten()
                 hist_features.extend(hist)
 
             # Combine features
-            combined_features = [edge_density] + hist_features
-            X_features.append(combined_features)
+            X_features.append(hist_features)
             y_labels.append(label) # 0-RealArt, 1-AIArtData
 
     X_features = np.array(X_features)
