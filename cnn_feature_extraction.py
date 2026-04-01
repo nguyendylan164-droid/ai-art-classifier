@@ -4,6 +4,9 @@ import numpy as np
 import keras
 from keras.applications import VGG16, ResNet50, EfficientNetB0
 from keras.applications.vgg16 import preprocess_input
+# comment out the below lines if you have a valid SSL certificate or are running in an environment that doesn't require it
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 
 def extract_cnn_features(data_dir):
     classes = ["RealArt", "AIArtData"]
