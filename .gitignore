@@ -1,0 +1,13 @@
+
+__pycache__/
+
+# models
+*.keras
+*.joblib
+
+# data
+*.npy
+/Art/
+*.jpg
+*.png
+*.jpeg

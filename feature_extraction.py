@@ -49,9 +49,9 @@ def extract_features(data_dir):
     X_features = np.array(X_features)
     y_labels = np.array(y_labels)
 
-    np.save("X_features.npy", X_features)
-    np.save("y_labels.npy", y_labels)
-    print(f"Features saved to X_features.npy and y_labels.npy")
+    np.save("extracted_features/X_features.npy", X_features)
+    np.save("extracted_features/y_labels.npy", y_labels)
+    print(f"Features saved to extracted_features/X_features.npy and extracted_features/y_labels.npy")
 
 if __name__ == "__main__":
     DATA_DIR = "./Art"

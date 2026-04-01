@@ -7,8 +7,8 @@ import joblib
 from svm import SVM
 
 def train_svm_model():
-    X=np.load("X_features.npy")
-    y=np.load("y_labels.npy")
+    X=np.load("extracted_features/X_features.npy")
+    y=np.load("extracted_features/y_labels.npy")
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -16,11 +16,11 @@ def train_svm_model():
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
 
-    svm_model = SVM(learning_rate=0.00001, lambda_param=0.3, iterations=1000)
+    svm_model = SVM(learning_rate=0.00001, lambda_param=0.6, iterations=1000)
     svm_model.fit(X_train, y_train)
 
-    joblib.dump(svm_model, "svm_model.joblib")
-    joblib.dump(scaler, "scaler.joblib")
+    joblib.dump(svm_model, "saved_models/svm_model.joblib")
+    joblib.dump(scaler, "saved_models/scaler.joblib")
 
     y_pred = svm_model.predict(X_test)
     print(f"Accuracy: {accuracy_score(y_test, y_pred) * 100:.3f}\n")
@@ -29,4 +29,5 @@ def train_svm_model():
     print("Confusion Matrix:")
     print(confusion_matrix(y_test, y_pred))
 
-train_svm_model()
+if __name__ == "__main__":
+    train_svm_model()
