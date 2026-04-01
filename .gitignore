@@ -7,7 +7,7 @@ __pycache__/
 
 # data
 *.npy
-/Art/
+Art/
 *.jpg
 *.png
 *.jpeg
