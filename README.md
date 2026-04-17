@@ -28,7 +28,7 @@ pip install -r requirements.txt
 
 ## 3. Prepare your dataset
 
-incomplete
+Download the AI vs. Human Art dataset from [Kaggle Link](https://www.kaggle.com/datasets/hassnainzaidi/ai-art-vs-human-art). Extract the zip file and place the AiArtData and RealArt folders inside an /Art directory at the root of this project
 
 The CNN trainer (`train_cnn.py`) and feature extraction (`feature_extraction.py`) both expect this layout.
 
