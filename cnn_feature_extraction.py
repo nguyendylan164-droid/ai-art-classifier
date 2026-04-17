@@ -1,3 +1,5 @@
+# CNN feature extraction to compare with hand-crafted features
+
 import os
 import cv2 
 import numpy as np

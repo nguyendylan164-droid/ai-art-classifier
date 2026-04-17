@@ -1,4 +1,4 @@
-# Data Analysis
+# Feature extraction and Data Analysis
 
 import os
 import cv2

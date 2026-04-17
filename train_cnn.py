@@ -1,85 +1,183 @@
+# CNN model
+
+import os
+
+import numpy as np
 import tensorflow as tf
 import keras
 from keras.applications import ResNet50
 from keras.layers import Dense, GlobalAveragePooling2D, Dropout
 from keras.models import Model
-import os
+from sklearn.utils.class_weight import compute_class_weight
 
 # load data
 data_dir = "./Art"
 batch_size = 32
 img_size = (224, 224)
+split_seed = 123
+phase1_epochs = 10
+phase2_epochs = 10
 
-# Create the training dataset with random flips and rotations to prevent overfitting
-# Update your training and validation loaders to look like this:
-train_dataset = keras.utils.image_dataset_from_directory(
+
+def training_split_dataset():
+    return keras.utils.image_dataset_from_directory(
+        data_dir,
+        validation_split=0.2,
+        subset="training",
+        seed=split_seed,
+        image_size=img_size,
+        batch_size=batch_size,
+        label_mode="binary",
+        crop_to_aspect_ratio=True,
+    )
+
+
+# Balanced class weights from a separate pass (do not consume the training pipeline)
+labels_for_weights = []
+for _, y in training_split_dataset():
+    labels_for_weights.append(y.numpy())
+y_train_flat = np.concatenate(labels_for_weights).ravel().astype(int)
+classes = np.unique(y_train_flat)
+cw = compute_class_weight("balanced", classes=classes, y=y_train_flat)
+class_weight = {int(c): float(w) for c, w in zip(classes, cw)}
+print(f"Class weights (for balanced loss): {class_weight}")
+
+weight_table = tf.constant(
+    [class_weight.get(0, 1.0), class_weight.get(1, 1.0)], dtype=tf.float32
+)
+
+
+def add_sample_weight(x, y):
+    y_int = tf.cast(tf.reshape(y, [-1]), tf.int32)
+    sw = tf.gather(weight_table, y_int)
+    return x, y, sw
+
+
+train_dataset = training_split_dataset()
+
+augmentation = keras.Sequential(
+    [
+        keras.layers.RandomFlip("horizontal"),
+        keras.layers.RandomRotation(0.1),
+        keras.layers.RandomZoom(0.1),
+        keras.layers.RandomBrightness(0.1),
+    ]
+)
+
+AUTOTUNE = tf.data.AUTOTUNE
+# Cache decoded images before augmentation so random augmentations differ each epoch
+train_dataset = (
+    train_dataset.cache()
+    .map(lambda x, y: (augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
+    .map(add_sample_weight, num_parallel_calls=AUTOTUNE)
+    .prefetch(buffer_size=AUTOTUNE)
+)
+
+val_dataset = keras.utils.image_dataset_from_directory(
     data_dir,
     validation_split=0.2,
-    subset="training",
-    seed=123,
-    image_size=(224, 224),
-    batch_size=32,
-    crop_to_aspect_ratio=True  # <--- ADD THIS LINE
+    subset="validation",
+    seed=split_seed,
+    image_size=img_size,
+    batch_size=batch_size,
+    label_mode="binary",
+    crop_to_aspect_ratio=True,
 )
-# Augmentation
-augmentation = keras.Sequential([
-    keras.layers.RandomFlip("horizontal"),
-    keras.layers.RandomRotation(0.1),
-    keras.layers.RandomZoom(0.1),
-    keras.layers.RandomBrightness(0.1),
-])
-
-# Force Keras to generate augmented images on the fly during training, instead of storing them all in memory
-train_dataset = train_dataset.map(lambda x, y: (augmentation(x, training=True), y))
-
-# Create the validation (testing) dataset (No augmentation here)
-val_dataset = keras.utils.image_dataset_from_directory(data_dir,validation_split=0.2,subset="validation",seed=42,image_size=img_size,batch_size=batch_size,label_mode='binary')
-
-# Optimize data loading speed
-AUTOTUNE = tf.data.AUTOTUNE
-train_dataset = train_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 val_dataset = val_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 
-# Build the architecture
-# Load ResNet50, but chop off the head
-base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+os.makedirs("saved_models", exist_ok=True)
 
-# Phase 1: Freeze the base model completely
+# Build the architecture
+base_model = ResNet50(
+    weights="imagenet", include_top=False, input_shape=(224, 224, 3)
+)
+
 base_model.trainable = False
 
-# Attach our custom classification head
 x = base_model.output
-x = GlobalAveragePooling2D()(x) # Flatten the 2D maps
-x = Dense(256, activation='relu')(x) # A smart processing layer
-x = Dropout(0.5)(x) # Drop 50% of connections randomly to prevent overfitting
-predictions = Dense(1, activation='sigmoid')(x) # Output: 0 (Real) or 1 (AI)
+x = GlobalAveragePooling2D()(x)
+x = Dense(256, activation="relu")(x)
+x = Dropout(0.5)(x)
+predictions = Dense(1, activation="sigmoid")(x)
 
-# Stitch it all together into one massive model
 model = Model(inputs=base_model.input, outputs=predictions)
 
-# Phase 1: warm up the head
+callbacks_phase1 = [
+    keras.callbacks.EarlyStopping(
+        monitor="val_loss",
+        patience=5,
+        restore_best_weights=True,
+        verbose=1,
+    ),
+    keras.callbacks.ReduceLROnPlateau(
+        monitor="val_loss",
+        factor=0.5,
+        patience=2,
+        min_lr=1e-6,
+        verbose=1,
+    ),
+    keras.callbacks.ModelCheckpoint(
+        filepath="saved_models/ai_art_classifier_resnet_phase1.keras",
+        monitor="val_loss",
+        save_best_only=True,
+        verbose=1,
+    ),
+]
+
+callbacks_phase2 = [
+    keras.callbacks.EarlyStopping(
+        monitor="val_loss",
+        patience=5,
+        restore_best_weights=True,
+        verbose=1,
+    ),
+    keras.callbacks.ReduceLROnPlateau(
+        monitor="val_loss",
+        factor=0.5,
+        patience=2,
+        min_lr=1e-7,
+        verbose=1,
+    ),
+    keras.callbacks.ModelCheckpoint(
+        filepath="saved_models/ai_art_classifier_resnet.keras",
+        monitor="val_loss",
+        save_best_only=True,
+        verbose=1,
+    ),
+]
+
 print("\nWarming up the custom head...")
-model.compile(optimizer=keras.optimizers.Adam(learning_rate=0.001),loss='binary_crossentropy',metrics=['accuracy'])
+model.compile(
+    optimizer=keras.optimizers.Adam(learning_rate=0.001),
+    loss="binary_crossentropy",
+    metrics=["accuracy"],
+)
 
-# Train just the head for a few epochs
-history_phase1 = model.fit(train_dataset, validation_data=val_dataset, epochs=5)
+history_phase1 = model.fit(
+    train_dataset,
+    validation_data=val_dataset,
+    epochs=phase1_epochs,
+    callbacks=callbacks_phase1,
+)
 
-# Phase 2: fine-tune the CNN
 print("\nUnfreezing the CNN for Fine-Tuning...")
-# Unfreeze the base model
 base_model.trainable = True
 
-# Freeze the bottom 100 layers (the ones that find basic lines and edges)
-# We only want to retrain the top layers (the ones that find complex textures)
 for layer in base_model.layers[:100]:
     layer.trainable = False
 
-# recompile with a microscopic learning rate so we don't destroy the brain
-model.compile(optimizer=keras.optimizers.Adam(learning_rate=1e-5),loss='binary_crossentropy',metrics=['accuracy'])
+model.compile(
+    optimizer=keras.optimizers.Adam(learning_rate=1e-5),
+    loss="binary_crossentropy",
+    metrics=["accuracy"],
+)
 
-# Train the unfrozen network
-history_phase2 = model.fit(train_dataset, validation_data=val_dataset, epochs=10)
+history_phase2 = model.fit(
+    train_dataset,
+    validation_data=val_dataset,
+    epochs=phase2_epochs,
+    callbacks=callbacks_phase2,
+)
 
-# Save the best model
-print("\nSaving the model...")
-model.save('saved_models/ai_art_classifier_resnet.keras')
+print("\nSaving the model (best weights already restored by EarlyStopping; checkpoint is best val)...")
+model.save("saved_models/ai_art_classifier_resnet_final.keras")
