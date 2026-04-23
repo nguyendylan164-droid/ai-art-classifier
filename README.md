@@ -1,6 +1,6 @@
 # ai-art-classifier
 
-Classify images as real art vs. AI-generated art using a CNN, with an optional hand-crafted feature + SVM path.
+Classify images as real art vs. AI-generated art using a CNN, with feature-based classical ML baselines and a rubric-ready analysis workflow.
 
 ## Prerequisites
 
@@ -28,7 +28,16 @@ pip install -r requirements.txt
 
 ## 3. Prepare your dataset
 
-Download the AI vs. Human Art dataset from [Kaggle Link](https://www.kaggle.com/datasets/hassnainzaidi/ai-art-vs-human-art). Extract the zip file and place the AiArtData and RealArt folders inside an /Art directory at the root of this project
+Download the AI vs. Human Art dataset from [Kaggle](https://www.kaggle.com/datasets/hassnainzaidi/ai-art-vs-human-art).
+Extract and place `AiArtData` and `RealArt` inside an `Art/` folder at the project root.
+
+Expected layout:
+
+```text
+Art/
+  RealArt/
+  AIArtData/
+```
 
 The CNN trainer (`train_cnn.py`) and feature extraction (`feature_extraction.py`) both expect this layout.
 
@@ -52,30 +61,61 @@ python app.py
 
 The Flask server starts (default `http://127.0.0.1:5000`). Send a **POST** request to `/predict` with multipart form field **`image`** (the image file).
 
-## Optional: SVM pipeline
+## Rubric-ready workflow (EDA, tuning, model comparison)
 
-Hand-crafted color histogram features and a custom SVM:
+Use these steps to satisfy the full ML project checklist (EDA + multi-model comparison + tuning + plots):
 
-1. Extract features:
+1. Extract handcrafted features:
 
    ```bash
    python feature_extraction.py
    ```
 
-   This creates `extracted_features/X_features.npy` and `extracted_features/y_labels.npy`.
-
-2. Train the SVM:
+2. Run EDA and generate figures:
 
    ```bash
-   python train_svm.py
+   python eda_analysis.py
    ```
 
-   This saves `saved_models/svm_model.joblib` and `saved_models/scaler.joblib`.
+   Outputs:
+   - `reports/eda_summary.md`
+   - `reports/figures/class_balance.png`
+   - `reports/figures/image_size_distribution.png`
+   - `reports/figures/feature_variance_hist.png`
+   - `reports/figures/feature_correlation_heatmap.png`
+   - `reports/figures/pca_2d.png`
+   - `reports/figures/tsne_2d.png`
 
-The REST app in `app.py` uses the **CNN** model, not the SVM.
+3. Train the CNN (needed if you want CNN in the comparison table):
+
+   ```bash
+   python train_cnn.py
+   ```
+
+4. Run hyperparameter tuning + compare **sklearn SVM**, **custom SVM** (`svm.py`, fixed hyperparameters in `tune_and_compare_models.py`), **Random Forest**, and **CNN**:
+
+   ```bash
+   python tune_and_compare_models.py
+   ```
+
+   Sklearn SVM and Random Forest use `GridSearchCV` on the handcrafted features. The custom SVM uses fixed hyperparameters defined next to `CUSTOM_SVM_*` in `tune_and_compare_models.py`. The CNN is evaluated on the **same** stratified test images (no grid search here; hyperparameters come from `train_cnn.py`).
+
+   Outputs:
+   - `reports/tuning_summary.md`
+   - `reports/model_comparison.csv`
+   - confusion matrices and ROC curves under `reports/figures/`
+   - `saved_models/svm_best.joblib`, `saved_models/random_forest_best.joblib`, and `saved_models/custom_svm_best.joblib`
+
+5. For your report, include:
+   - dataset characteristics (size/class balance)
+   - EDA findings (feature/correlation/PCA/t-SNE plots)
+   - tuned hyperparameters and rationale
+   - comparison across model families (linear/tree/neural)
+   - metrics (Accuracy, Precision, Recall, F1, ROC-AUC)
+   - limitations and future work
 
 ## Troubleshooting
 
-- **`FileNotFoundError` for `saved_models/ai_art_classifier_resnet.keras`:** Run `train_cnn.py` first (step 4).
+- **`FileNotFoundError` for `saved_models/ai_art_classifier_resnet.keras`:** Run `train_cnn.py` first (rubric workflow step 3). If you run `tune_and_compare_models.py` without it, CNN is skipped; sklearn SVM, custom SVM, and Random Forest are still compared.
 - **Empty or wrong classes:** Ensure `Art/` has exactly the two class folders with images inside them.
-- **TensorFlow install issues:** See the [official TensorFlow install guide](https://www.tensorflow.org/install) for your OS and Python version. May need to create venv with Python 3.11.
+- **TensorFlow install issues:** See the [official TensorFlow install guide](https://www.tensorflow.org/install) for your OS and Python version. On Windows, use Python 3.10-3.12 for best compatibility.

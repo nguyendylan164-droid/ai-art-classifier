@@ -6,3 +6,6 @@ joblib
 tensorflow
 flask
 flask-cors
+matplotlib
+seaborn
+pandas

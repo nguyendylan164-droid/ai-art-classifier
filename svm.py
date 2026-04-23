@@ -27,4 +27,7 @@ class SVM:
     def predict(self, X):
         approx = np.dot(X, self.w) - self.b
         return np.where(np.sign(approx) == -1, 0, 1)
-        
+
+    def decision_function(self, X):
+        """Signed margin; higher => positive class (label 1)."""
+        return np.dot(X, self.w) - self.b
