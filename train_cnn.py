@@ -1,4 +1,12 @@
-# CNN model
+"""Train a binary RealArt vs AIArtData CNN with transfer learning.
+
+Pipeline overview:
+1) Load a reproducible train/validation split from Art/.
+2) Apply augmentation and ResNet50 preprocessing.
+3) Warm up the classification head with frozen backbone.
+4) Unfreeze part of the backbone for low-LR fine-tuning.
+5) Save checkpoints and final model under saved_models/.
+"""
 
 import os
 
@@ -21,6 +29,7 @@ phase2_epochs = 10
 
 
 def training_split_dataset():
+    """Create the training split once so class weights and training use same split."""
     return keras.utils.image_dataset_from_directory(
         data_dir,
         validation_split=0.2,
@@ -49,6 +58,7 @@ weight_table = tf.constant(
 
 
 def add_sample_weight(x, y):
+    """Attach per-example class weights so minority class contributes more to loss."""
     y_int = tf.cast(tf.reshape(y, [-1]), tf.int32)
     sw = tf.gather(weight_table, y_int)
     return x, y, sw
@@ -69,7 +79,9 @@ AUTOTUNE = tf.data.AUTOTUNE
 # Cache decoded images before augmentation so random augmentations differ each epoch
 train_dataset = (
     train_dataset.cache()
+    # Augment before preprocess_input so model sees realistic image variation.
     .map(lambda x, y: (augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
+    # Match ImageNet preprocessing expected by ResNet50 backbone.
     .map(lambda x, y: (preprocess_input(x), y), num_parallel_calls=AUTOTUNE)
     .map(add_sample_weight, num_parallel_calls=AUTOTUNE)
     .prefetch(buffer_size=AUTOTUNE)
@@ -87,13 +99,14 @@ val_dataset = keras.utils.image_dataset_from_directory(
 )
 val_dataset = (
     val_dataset.cache()
+    # Validation must use the same preprocessing as training/inference.
     .map(lambda x, y: (preprocess_input(x), y), num_parallel_calls=AUTOTUNE)
     .prefetch(buffer_size=AUTOTUNE)
 )
 
 os.makedirs("saved_models", exist_ok=True)
 
-# Build the architecture
+# Build a transfer-learning model: ResNet50 backbone + small binary head.
 base_model = ResNet50(
     weights="imagenet", include_top=False, input_shape=(224, 224, 3)
 )
@@ -153,6 +166,7 @@ callbacks_phase2 = [
 ]
 
 print("\nWarming up the custom head...")
+# Phase 1: train only the new head so it adapts before full fine-tuning.
 model.compile(
     optimizer=keras.optimizers.Adam(learning_rate=0.001),
     loss="binary_crossentropy",
@@ -169,9 +183,11 @@ history_phase1 = model.fit(
 print("\nUnfreezing the CNN for Fine-Tuning...")
 base_model.trainable = True
 
+# Keep early layers frozen (generic edge/texture features), tune deeper layers.
 for layer in base_model.layers[:100]:
     layer.trainable = False
 
+# Phase 2: fine-tune trainable backbone layers with a much smaller LR.
 model.compile(
     optimizer=keras.optimizers.Adam(learning_rate=1e-5),
     loss="binary_crossentropy",

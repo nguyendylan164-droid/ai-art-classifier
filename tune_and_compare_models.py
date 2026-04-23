@@ -25,6 +25,14 @@ from sklearn.svm import SVC
 
 from svm import SVM as CustomSVM
 
+"""Tune/evaluate classical baselines and compare them against the trained CNN.
+
+Design goals:
+- Keep all models on the same stratified test split for fair comparison.
+- Report rubric-friendly metrics and plots (CM, ROC, F1 bar chart).
+- Persist best estimators and a short tuning summary for reproducibility.
+"""
+
 
 # Custom SVM hyperparameters (gradient-descent SVM in svm.py)
 CUSTOM_SVM_LR = 0.00001
@@ -42,6 +50,7 @@ MODEL_DIR = "saved_models"
 
 
 def ensure_dirs():
+    """Create output folders used by reports, plots, and saved estimators."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs(FIG_DIR, exist_ok=True)
     os.makedirs(MODEL_DIR, exist_ok=True)
@@ -68,6 +77,7 @@ def collect_paths_and_labels(data_dir):
 
 
 def load_data():
+    """Load handcrafted features and recreate a deterministic train/test split."""
     if not (os.path.exists(FEATURE_PATH) and os.path.exists(LABEL_PATH)):
         raise FileNotFoundError(
             "Feature files not found. Run: python feature_extraction.py first."
@@ -94,6 +104,7 @@ def load_data():
 
 
 def evaluate_model(name, estimator, X_test, y_test):
+    """Evaluate a sklearn-style estimator and save confusion matrix + ROC plot."""
     y_pred = estimator.predict(X_test)
 
     if hasattr(estimator, "predict_proba"):
@@ -154,6 +165,7 @@ def evaluate_cnn(name, model, paths_test, y_test):
     for p in paths_test:
         img = cv2.imread(p)
         if img is None:
+            # Neutral fallback if an image unexpectedly fails to load.
             y_scores_real.append(0.5)
             continue
         x = preprocess_image_bgr(img)
@@ -207,6 +219,7 @@ class _ScaledCustomSVM:
 
 
 def tune_and_train(X_train, y_train):
+    """Run GridSearchCV for sklearn SVM and Random Forest baselines."""
     results = {}
 
     svm_pipe = Pipeline(
@@ -237,6 +250,7 @@ def tune_and_train(X_train, y_train):
 
 
 def write_tuning_report(search_results):
+    """Write a markdown summary of tuned parameters and non-tuned model notes."""
     lines = ["# Hyperparameter Tuning Summary", ""]
     for name, search in search_results.items():
         lines.append(f"## {name}")
@@ -264,6 +278,7 @@ def write_tuning_report(search_results):
 
 
 def main():
+    """End-to-end orchestration for tuning, evaluation, artifact saving, and plots."""
     ensure_dirs()
     sns.set_theme(style="whitegrid")
 
@@ -295,6 +310,7 @@ def main():
     )
 
     if os.path.isfile(CNN_MODEL_PATH):
+        # CNN uses raw image paths because it is evaluated on full images, not features.
         model = keras.models.load_model(CNN_MODEL_PATH)
         metrics_rows.append(
             evaluate_cnn("cnn", model, paths_test, y_test)
