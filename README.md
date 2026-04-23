@@ -4,26 +4,42 @@ Classify images as real art vs. AI-generated art using a CNN, with feature-based
 
 ## Prerequisites
 
-- Python 3.9+ recommended
+- Python 3.10-3.12 recommended (TensorFlow compatibility)
 - A GPU is optional but speeds up CNN training
 
 ## 1. Clone and create a virtual environment
 
+Use Python 3.10 on Windows for best TensorFlow compatibility.
+
 ```bash
 cd ai-art-classifier
-python -m venv .venv
+py -0p
+py -3.10 -m venv .env
 ```
 
 **Activate the environment**
 
-- **Windows (PowerShell):** `.venv\Scripts\Activate.ps1`
-- **Windows (cmd):** `.venv\Scripts\activate.bat`
-- **macOS / Linux:** `source .venv/bin/activate`
+- **Windows (PowerShell):** `.env\Scripts\Activate.ps1`
+- **Windows (cmd):** `.env\Scripts\activate.bat`
+- **macOS / Linux:** `source .env/bin/activate`
+
+Then confirm Python points to 3.10:
+
+```bash
+python --version
+```
 
 ## 2. Install dependencies
 
 ```bash
+python -m pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+Optional TensorFlow sanity check:
+
+```bash
+python -c "import tensorflow as tf; print(tf.__version__)"
 ```
 
 ## 3. Prepare your dataset

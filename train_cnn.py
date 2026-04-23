@@ -6,6 +6,7 @@ import numpy as np
 import tensorflow as tf
 import keras
 from keras.applications import ResNet50
+from keras.applications.resnet50 import preprocess_input
 from keras.layers import Dense, GlobalAveragePooling2D, Dropout
 from keras.models import Model
 from sklearn.utils.class_weight import compute_class_weight
@@ -69,6 +70,7 @@ AUTOTUNE = tf.data.AUTOTUNE
 train_dataset = (
     train_dataset.cache()
     .map(lambda x, y: (augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
+    .map(lambda x, y: (preprocess_input(x), y), num_parallel_calls=AUTOTUNE)
     .map(add_sample_weight, num_parallel_calls=AUTOTUNE)
     .prefetch(buffer_size=AUTOTUNE)
 )
@@ -83,7 +85,11 @@ val_dataset = keras.utils.image_dataset_from_directory(
     label_mode="binary",
     crop_to_aspect_ratio=True,
 )
-val_dataset = val_dataset.cache().prefetch(buffer_size=AUTOTUNE)
+val_dataset = (
+    val_dataset.cache()
+    .map(lambda x, y: (preprocess_input(x), y), num_parallel_calls=AUTOTUNE)
+    .prefetch(buffer_size=AUTOTUNE)
+)
 
 os.makedirs("saved_models", exist_ok=True)
 
@@ -180,4 +186,4 @@ history_phase2 = model.fit(
 )
 
 print("\nSaving the model (best weights already restored by EarlyStopping; checkpoint is best val)...")
-model.save("saved_models/ai_art_classifier_resnet_final.keras")
+model.save("saved_models/ai_art_classifier_resnet.keras")
